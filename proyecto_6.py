@@ -190,9 +190,9 @@ game_data['genre'].fillna('', inplace=True)
 game_data['rating'].fillna('', inplace=True)
 
 
-# 'critic_score', 'user_score' - Rellenar con la media de la columna
-game_data['critic_score'].fillna(game_data['critic_score'].mean(), inplace=True)
-game_data['user_score'].fillna(game_data['user_score'].mean(), inplace=True)
+# 'critic_score', 'user_score' - Rellenar con la mediana de la columna
+game_data['critic_score'].fillna(game_data['critic_score'].median(), inplace=True)
+game_data['user_score'].fillna(game_data['user_score'].median(), inplace=True)
 # 'year_of_release' - Dejar valores ausentes como NaN
 # 'year_of_release' contiene información crítica que no debe ser adivinada o interpolada
 
@@ -262,14 +262,23 @@ top_platforms = platform_sales.head(5).index
 filtered_data = game_data[game_data['platform'].isin(top_platforms)]
 
 
+# Limitar el análisis a los últimos 5 años
+recent_years = game_data['year_of_release'].dropna().unique()
+recent_years = sorted(recent_years, reverse=True)[:5]
+
+
+# Filtramos el DataFrame para solo incluir los años recientes
+filtered_data_recent = filtered_data[filtered_data['year_of_release'].isin(recent_years)]
+
+
 # Agrupamos los datos por año y plataforma y sumamos las ventas
-yearly_sales = filtered_data.groupby(['year_of_release', 'platform'])['total_sales'].sum().unstack().fillna(0)
+yearly_sales_recent = filtered_data_recent.groupby(['year_of_release', 'platform'])['total_sales'].sum().unstack().fillna(0)
 
 
 # Graficamos la distribución de ventas por año para las plataformas populares
 plt.figure(figsize=(12, 6))
-yearly_sales.plot(kind='bar', stacked=True)
-plt.title('Distribución de ventas por año para las plataformas populares')
+yearly_sales_recent.plot(kind='bar', stacked=True)
+plt.title('Distribución de ventas por año para las plataformas populares (últimos 5 años)')
 plt.xlabel('Año de lanzamiento')
 plt.ylabel('Ventas totales')
 plt.legend(title='Plataforma')
@@ -286,14 +295,19 @@ popular_platforms = platform_sales[platform_sales > platform_sales.mean()].index
 filtered_popular_data = game_data[game_data['platform'].isin(popular_platforms)]
 
 
+# Limitar el análisis a los últimos 5 años
+filtered_popular_data_recent = filtered_popular_data[filtered_popular_data['year_of_release'].isin(recent_years)]
+
+
 # Agrupamos los datos por plataforma y año y sumamos las ventas
-platform_yearly_sales = filtered_popular_data.groupby(['platform', 'year_of_release'])['total_sales'].sum().unstack().fillna(0)
+platform_yearly_sales_recent = filtered_popular_data_recent.groupby(['platform', 'year_of_release'])['total_sales'].sum().unstack().fillna(0)
+
 
 
 # Mostramos las plataformas que solían ser populares pero que ahora no tienen ventas
 print("Plataformas que solían ser populares pero que ahora no tienen ventas:")
 for platform in popular_platforms:
-    if platform_yearly_sales.loc[platform].tail(1).values[0] == 0:
+    if platform_yearly_sales_recent.loc[platform].tail(1).values[0] == 0:
         print(platform)
 
 
@@ -317,6 +331,22 @@ plt.xlabel('Plataforma')
 plt.ylabel('Ventas globales')
 plt.xticks(rotation=90)
 plt.show()
+
+
+# Identificación de outliers
+q1 = game_data['total_sales'].quantile(0.25)
+q3 = game_data['total_sales'].quantile(0.75)
+iqr = q3 - q1
+lower_bound = q1 - 1.5 * iqr
+upper_bound = q3 + 1.5 * iqr
+
+
+# Filtramos los outliers
+filtered_data_no_outliers = game_data[(game_data['total_sales'] >= lower_bound) & (game_data['total_sales'] <= upper_bound)]
+
+
+print("\nInformación general del DataFrame sin outliers:")
+print(filtered_data_no_outliers.info())
 
 
 # Análisis de reseñas de usuarios y profesionales
@@ -498,9 +528,10 @@ las medias de dos grupos independientes.
 """
 
 
-# Hipótesis 1: Xbox One vs PC
-xbox_one_scores = game_data[game_data['platform'] == 'XOne']['user_score']
-pc_scores = game_data[game_data['platform'] == 'PC']['user_score']
+# Hipótesis 1: Xbox One vs PC (sin outliers)
+xbox_one_scores_no_outliers = filtered_data_no_outliers[filtered_data_no_outliers['platform'] == 'XOne']['user_score']
+pc_scores_no_outliers = filtered_data_no_outliers[filtered_data_no_outliers['platform'] == 'PC']['user_score']
+
 
 '''
 Hipótesis 1: Calificaciones promedio de usuarios para Xbox One y PC
@@ -511,14 +542,16 @@ La hipótesis alternativa (H1) es una declaración que propone una diferencia o 
 usuarios para las plataformas Xbox One y PC no son iguales y que la diferencia observada es significativa.
 '''
 
+
 # Realización de la prueba t
-t_stat_xbox_pc, p_val_xbox_pc = ttest_ind(xbox_one_scores, pc_scores, equal_var=False)
-print(f"Prueba t para Xbox One vs PC: t-stat = {t_stat_xbox_pc}, p-value = {p_val_xbox_pc}")
+t_stat_xbox_pc_no_outliers, p_val_xbox_pc_no_outliers = ttest_ind(xbox_one_scores_no_outliers, pc_scores_no_outliers, equal_var=False)
+print(f"Prueba t para Xbox One vs PC (sin outliers): t-stat = {t_stat_xbox_pc_no_outliers}, p-value = {p_val_xbox_pc_no_outliers}")
 
 
-# Hipótesis 2: Acción vs Deportes
-accion_scores = game_data[game_data['genre'] == 'Action']['user_score']
-deportes_scores = game_data[game_data['genre'] == 'Sports']['user_score']
+# Hipótesis 2: Acción vs Deportes (sin outliers)
+accion_scores_no_outliers = filtered_data_no_outliers[filtered_data_no_outliers['genre'] == 'Action']['user_score']
+deportes_scores_no_outliers = filtered_data_no_outliers[filtered_data_no_outliers['genre'] == 'Sports']['user_score']
+
 
 '''
 Hipótesis 2: Calificaciones promedio de usuarios para los géneros Acción y Deportes
@@ -527,9 +560,10 @@ H0 asume que no hay diferencia significativa entre las calificaciones promedio d
 H1 sugiere que hay una diferencia significativa entre las calificaciones promedio de los usuarios para los géneros de Acción y Deportes.
 '''
 
+
 # Realización de la prueba t
-t_stat_action_sports, p_val_action_sports = ttest_ind(accion_scores, deportes_scores, equal_var=False)
-print(f"Prueba t para Acción vs Deportes: t-stat = {t_stat_action_sports}, p-value = {p_val_action_sports}")
+t_stat_action_sports_no_outliers, p_val_action_sports_no_outliers = ttest_ind(accion_scores_no_outliers, deportes_scores_no_outliers, equal_var=False)
+print(f"Prueba t para Acción vs Deportes (sin outliers): t-stat = {t_stat_action_sports_no_outliers}, p-value = {p_val_action_sports_no_outliers}")
 
 
 '''
@@ -539,16 +573,16 @@ rechaza la hipótesis nula.
 '''
 
 
-# Resultados
-if p_val_xbox_pc < 0.05:
-    print("Rechazamos la hipótesis nula para Xbox One vs PC: Las calificaciones promedio de los usuarios son diferentes.")
+# Resultados (sin outliers)
+if p_val_xbox_pc_no_outliers < 0.05:
+    print("Rechazamos la hipótesis nula para Xbox One vs PC (sin outliers): Las calificaciones promedio de los usuarios son diferentes.")
 else:
-    print("No podemos rechazar la hipótesis nula para Xbox One vs PC: Las calificaciones promedio de los usuarios son iguales.")
+    print("No podemos rechazar la hipótesis nula para Xbox One vs PC (sin outliers): Las calificaciones promedio de los usuarios son iguales.")
 
-if p_val_action_sports < 0.05:
-    print("Rechazamos la hipótesis nula para Acción vs Deportes: Las calificaciones promedio de los usuarios son diferentes.")
+if p_val_action_sports_no_outliers < 0.05:
+    print("Rechazamos la hipótesis nula para Acción vs Deportes (sin outliers): Las calificaciones promedio de los usuarios son diferentes.")
 else:
-    print("No podemos rechazar la hipótesis nula para Acción vs Deportes: Las calificaciones promedio de los usuarios son iguales.")
+    print("No podemos rechazar la hipótesis nula para Acción vs Deportes (sin outliers): Las calificaciones promedio de los usuarios son iguales.")
 
 
 '''
