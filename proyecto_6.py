@@ -136,7 +136,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-from scipy.stats import ttest_ind
+from scipy.stats import ttest_ind, levene
 
 
 # Cargando el dataset en un dataframe
